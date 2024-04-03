@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+
 namespace ParquetSharp.Dataset.Test;
 
 internal sealed class DisposableDirectory : IDisposable
@@ -45,6 +48,7 @@ internal sealed class DisposableDirectory : IDisposable
         {
             Directory.CreateDirectory(dir);
         }
+
         return absPath;
     }
 

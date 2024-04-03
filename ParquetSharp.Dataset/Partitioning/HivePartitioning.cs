@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Web;
 using Apache.Arrow;
 using Apache.Arrow.Types;
@@ -86,6 +88,7 @@ public sealed class HivePartitioning : IPartitioning
                     throw new ArgumentException(
                         $"Found null value for non-nullable partition field '{fieldName}'", nameof(pathComponents));
                 }
+
                 fieldValue = null;
             }
 

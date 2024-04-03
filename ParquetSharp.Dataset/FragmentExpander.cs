@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Apache.Arrow;
 
 namespace ParquetSharp.Dataset;
@@ -29,6 +32,7 @@ internal sealed class FragmentExpander
                     throw new Exception(
                         $"Field '{field.Name}' found in both the fragment data and partition information");
                 }
+
                 var typeComparer = new TypeComparer(field.DataType);
                 var fragmentField = fragmentBatch.Schema.GetFieldByName(field.Name);
                 fragmentField.DataType.Accept(typeComparer);
@@ -37,6 +41,7 @@ internal sealed class FragmentExpander
                     throw new Exception(
                         $"Data type {fragmentField.DataType} for column '{field.Name}' doesn't match the expected type {field.DataType}");
                 }
+
                 arrays.Add(fragmentBatch.Column(field.Name));
             }
             else if (partitionFields.Contains(field.Name))

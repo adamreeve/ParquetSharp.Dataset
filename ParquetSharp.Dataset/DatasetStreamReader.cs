@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Apache.Arrow;
 using Apache.Arrow.Ipc;
 using ParquetSharp.Arrow;
@@ -80,6 +83,7 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
                 columnIndices.Add(fileSchema.GetFieldIndex(field.Name));
             }
         }
+
         return columnIndices.ToArray();
     }
 

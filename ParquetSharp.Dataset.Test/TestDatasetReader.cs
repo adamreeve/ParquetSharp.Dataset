@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Apache.Arrow;
 using Apache.Arrow.Ipc;
 using Apache.Arrow.Types;
@@ -28,7 +32,7 @@ public class TestDatasetReader
             new NoPartitioning(),
             schema: schema);
         using var reader = dataset.ToBatches();
-        await VerifyData(reader, new Dictionary<int, int> {{0, 10}, {1, 10}});
+        await VerifyData(reader, new Dictionary<int, int> { { 0, 10 }, { 1, 10 } });
     }
 
     [Test]
@@ -50,9 +54,9 @@ public class TestDatasetReader
             .Field(new Field("x", new FloatType(), false))
             .Build();
         var partitioning = new HivePartitioning(
-                new Apache.Arrow.Schema.Builder()
-                    .Field(new Field("part", new StringType(), false))
-                    .Build());
+            new Apache.Arrow.Schema.Builder()
+                .Field(new Field("part", new StringType(), false))
+                .Build());
         var dataset = new DatasetReader(
             tmpDir.DirectoryPath,
             partitioning,
@@ -62,16 +66,16 @@ public class TestDatasetReader
         using var reader = dataset.ToBatches();
         await VerifyData(
             reader,
-            new Dictionary<int, int> {{0, 10}, {1, 10}, {2, 10}, {3, 10}},
-            new Dictionary<string, int> {{"a", 20}, {"b", 20}});
+            new Dictionary<int, int> { { 0, 10 }, { 1, 10 }, { 2, 10 }, { 3, 10 } },
+            new Dictionary<string, int> { { "a", 20 }, { "b", 20 } });
 
         // Read filtered on partition
         var filter = Col.Named("part").IsEqualTo("b");
         using var filteredReader = dataset.ToBatches(filter);
         await VerifyData(
             filteredReader,
-            new Dictionary<int, int> {{2, 10}, {3, 10}},
-            new Dictionary<string, int> {{"b", 20}});
+            new Dictionary<int, int> { { 2, 10 }, { 3, 10 } },
+            new Dictionary<string, int> { { "b", 20 } });
     }
 
     [Test]
@@ -89,23 +93,23 @@ public class TestDatasetReader
             .Field(new Field("x", new FloatType(), false))
             .Build();
         var partitioning = new HivePartitioning(
-                new Apache.Arrow.Schema.Builder()
-                    .Field(new Field("part", new StringType(), false))
-                    .Build());
+            new Apache.Arrow.Schema.Builder()
+                .Field(new Field("part", new StringType(), false))
+                .Build());
         var dataset = new DatasetReader(
             tmpDir.DirectoryPath,
             partitioning,
             schema: schema);
 
         // Read all files, but a subset of columns
-        using var reader = dataset.ToBatches(columns: new [] {"id", "part"});
-        Assert.That(reader.Schema.FieldsList.Select(f => f.Name), Is.EqualTo(new [] {"id", "part"}));
+        using var reader = dataset.ToBatches(columns: new[] { "id", "part" });
+        Assert.That(reader.Schema.FieldsList.Select(f => f.Name), Is.EqualTo(new[] { "id", "part" }));
 
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
             using (batch)
             {
-                Assert.That(batch.Schema.FieldsList.Select(f => f.Name), Is.EqualTo(new [] {"id", "part"}));
+                Assert.That(batch.Schema.FieldsList.Select(f => f.Name), Is.EqualTo(new[] { "id", "part" }));
                 Assert.That(batch.ColumnCount, Is.EqualTo(2));
                 Assert.That(batch.Column(0), Is.InstanceOf<Int32Array>());
                 Assert.That(batch.Column(1), Is.InstanceOf<StringArray>());
@@ -128,23 +132,23 @@ public class TestDatasetReader
             .Field(new Field("x", new FloatType(), false))
             .Build();
         var partitioning = new HivePartitioning(
-                new Apache.Arrow.Schema.Builder()
-                    .Field(new Field("part", new StringType(), false))
-                    .Build());
+            new Apache.Arrow.Schema.Builder()
+                .Field(new Field("part", new StringType(), false))
+                .Build());
         var dataset = new DatasetReader(
             tmpDir.DirectoryPath,
             partitioning,
             schema: schema);
 
         // Read all files, but don't create a column for the partitioning field
-        using var reader = dataset.ToBatches(columns: new [] {"id", "x"});
-        Assert.That(reader.Schema.FieldsList.Select(f => f.Name), Is.EqualTo(new [] {"id", "x"}));
+        using var reader = dataset.ToBatches(columns: new[] { "id", "x" });
+        Assert.That(reader.Schema.FieldsList.Select(f => f.Name), Is.EqualTo(new[] { "id", "x" }));
 
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
             using (batch)
             {
-                Assert.That(batch.Schema.FieldsList.Select(f => f.Name), Is.EqualTo(new [] {"id", "x"}));
+                Assert.That(batch.Schema.FieldsList.Select(f => f.Name), Is.EqualTo(new[] { "id", "x" }));
                 Assert.That(batch.ColumnCount, Is.EqualTo(2));
                 Assert.That(batch.Column(0), Is.InstanceOf<Int32Array>());
                 Assert.That(batch.Column(1), Is.InstanceOf<FloatArray>());
@@ -167,16 +171,16 @@ public class TestDatasetReader
             .Field(new Field("x", new FloatType(), false))
             .Build();
         var partitioning = new HivePartitioning(
-                new Apache.Arrow.Schema.Builder()
-                    .Field(new Field("part", new StringType(), false))
-                    .Build());
+            new Apache.Arrow.Schema.Builder()
+                .Field(new Field("part", new StringType(), false))
+                .Build());
         var dataset = new DatasetReader(
             tmpDir.DirectoryPath,
             partitioning,
             schema: schema);
 
         var exception = Assert.Throws<ArgumentException>(
-            () => dataset.ToBatches(columns: new[] {"part", "id", "nonexistent"}));
+            () => dataset.ToBatches(columns: new[] { "part", "id", "nonexistent" }));
         Assert.That(exception!.Message, Does.Contain("'nonexistent'"));
     }
 
@@ -195,9 +199,16 @@ public class TestDatasetReader
         WriteParquetFile(tmpDir.AbsPath("data0.parquet"), batch0);
         WriteParquetFile(tmpDir.AbsPath("data1.parquet"), batch1);
 
+        // We need to define the schema, as the order in which files are visited for schema inference isn't deterministic.
+        var schema = new Apache.Arrow.Schema.Builder()
+            .Field(new Field("id", new Int32Type(), false))
+            .Field(new Field("x", new FloatType(), false))
+            .Build();
+
         var dataset = new DatasetReader(
             tmpDir.DirectoryPath,
-            new NoPartitioning());
+            new NoPartitioning(),
+            schema);
         using var reader = dataset.ToBatches();
         var exception = Assert.ThrowsAsync<Exception>(async () =>
         {
@@ -226,9 +237,15 @@ public class TestDatasetReader
         WriteParquetFile(tmpDir.AbsPath("data0.parquet"), batch0);
         WriteParquetFile(tmpDir.AbsPath("data1.parquet"), batch1);
 
+        var schema = new Apache.Arrow.Schema.Builder()
+            .Field(new Field("id", new Int32Type(), false))
+            .Field(new Field("x", new FloatType(), false))
+            .Build();
+
         var dataset = new DatasetReader(
             tmpDir.DirectoryPath,
-            new NoPartitioning());
+            new NoPartitioning(),
+            schema);
         using var reader = dataset.ToBatches();
         var exception = Assert.ThrowsAsync<Exception>(async () =>
         {
@@ -248,9 +265,9 @@ public class TestDatasetReader
         using var tmpDir = new DisposableDirectory();
 
         var partitioning = new HivePartitioning(
-                new Apache.Arrow.Schema.Builder()
-                    .Field(new Field("part", new StringType(), false))
-                    .Build());
+            new Apache.Arrow.Schema.Builder()
+                .Field(new Field("part", new StringType(), false))
+                .Build());
         var dataset = new DatasetReader(
             tmpDir.DirectoryPath,
             partitioning);
@@ -272,9 +289,9 @@ public class TestDatasetReader
         WriteParquetFile(tmpDir.AbsPath("part=a/data0.parquet"), batch0);
 
         var partitioning = new HivePartitioning(
-                new Apache.Arrow.Schema.Builder()
-                    .Field(new Field("part", new StringType(), false))
-                    .Build());
+            new Apache.Arrow.Schema.Builder()
+                .Field(new Field("part", new StringType(), false))
+                .Build());
         var dataset = new DatasetReader(
             tmpDir.DirectoryPath,
             partitioning);
@@ -459,9 +476,9 @@ public class TestDatasetReader
         using var tmpDir = new DisposableDirectory();
 
         var schema = new Apache.Arrow.Schema.Builder()
-                .Field(new Field("x", new Int32Type(), false))
-                .Field(new Field("y", new Int32Type(), false))
-                .Build();
+            .Field(new Field("x", new Int32Type(), false))
+            .Field(new Field("y", new Int32Type(), false))
+            .Build();
         var partitioning = new HivePartitioning(
             new Apache.Arrow.Schema.Builder()
                 .Field(new Field("y", new Int32Type(), false))
@@ -479,9 +496,9 @@ public class TestDatasetReader
         using var tmpDir = new DisposableDirectory();
 
         var schema = new Apache.Arrow.Schema.Builder()
-                .Field(new Field("x", new Int32Type(), false))
-                .Field(new Field("y", new Int32Type(), false))
-                .Build();
+            .Field(new Field("x", new Int32Type(), false))
+            .Field(new Field("y", new Int32Type(), false))
+            .Build();
         var partitioning = new HivePartitioning(
             new Apache.Arrow.Schema.Builder()
                 .Field(new Field("x", new StringType(), false))
@@ -503,10 +520,10 @@ public class TestDatasetReader
         WriteParquetFile(tmpDir.AbsPath("part=b/data1.parquet"), batch1);
 
         var schema = new Apache.Arrow.Schema.Builder()
-                .Field(new Field("part", new StringType(), false))
-                .Field(new Field("id", new Int32Type(), false))
-                .Field(new Field("x", new FloatType(), false))
-                .Build();
+            .Field(new Field("part", new StringType(), false))
+            .Field(new Field("id", new Int32Type(), false))
+            .Field(new Field("x", new FloatType(), false))
+            .Build();
         var partitioning = new HivePartitioning(
             new Apache.Arrow.Schema.Builder()
                 .Field(new Field("part", new StringType(), false))
@@ -533,11 +550,11 @@ public class TestDatasetReader
         WriteParquetFile(tmpDir.AbsPath("part=b/part_id=456/data1.parquet"), batch1);
 
         var schema = new Apache.Arrow.Schema.Builder()
-                .Field(new Field("part", new StringType(), false))
-                .Field(new Field("part_id", new Int32Type(), false))
-                .Field(new Field("id", new Int32Type(), false))
-                .Field(new Field("x", new FloatType(), false))
-                .Build();
+            .Field(new Field("part", new StringType(), false))
+            .Field(new Field("part_id", new Int32Type(), false))
+            .Field(new Field("id", new Int32Type(), false))
+            .Field(new Field("x", new FloatType(), false))
+            .Build();
         var partitioning = new HivePartitioning(
             new Apache.Arrow.Schema.Builder()
                 .Field(new Field("part", new StringType(), false))
@@ -546,7 +563,7 @@ public class TestDatasetReader
 
         var dataset = new DatasetReader(tmpDir.DirectoryPath, partitioning, schema);
 
-        var filters = new []
+        var filters = new[]
         {
             (Col.Named("part").IsEqualTo(3), "part"),
             (Col.Named("part").IsInRange(1, 5), "part"),
@@ -591,6 +608,7 @@ public class TestDatasetReader
                     partValues = batch.Column("part") as StringArray;
                     Assert.That(partValues, Is.Not.Null);
                 }
+
                 for (var i = 0; i < batch.Length; ++i)
                 {
                     var id = idValues!.GetValue(i)!.Value;
@@ -599,8 +617,9 @@ public class TestDatasetReader
                     {
                         rowCountsById[id] += 1;
                     }
-                    Assert.That(x, Is.GreaterThanOrEqualTo((float) id));
-                    Assert.That(x, Is.LessThan((float) id + 1));
+
+                    Assert.That(x, Is.GreaterThanOrEqualTo((float)id));
+                    Assert.That(x, Is.LessThan((float)id + 1));
 
                     if (partValues != null)
                     {
@@ -630,12 +649,12 @@ public class TestDatasetReader
         }
     }
 
-    private static RecordBatch GenerateBatch(int id, int numRows=10)
+    private static RecordBatch GenerateBatch(int id, int numRows = 10)
     {
         var builder = new RecordBatch.Builder();
         var idValues = Enumerable.Repeat(id, numRows).ToArray();
         builder.Append("id", false, new Int32Array.Builder().Append(idValues));
-        var xValues = Enumerable.Range(0, numRows).Select(x => id + x / (float) numRows).ToArray();
+        var xValues = Enumerable.Range(0, numRows).Select(x => id + x / (float)numRows).ToArray();
         builder.Append("x", false, new FloatArray.Builder().Append(xValues));
         return builder.Build();
     }

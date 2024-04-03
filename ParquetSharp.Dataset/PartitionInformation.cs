@@ -1,3 +1,4 @@
+using System;
 using Apache.Arrow;
 
 namespace ParquetSharp.Dataset;
@@ -15,6 +16,7 @@ public sealed class PartitionInformation
             throw new ArgumentException(
                 $"Expected a record batch with 1 row, but the length is {batch.Length}", nameof(batch));
         }
+
         Batch = batch;
     }
 

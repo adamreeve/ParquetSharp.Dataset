@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using Apache.Arrow;
 using Apache.Arrow.Types;
 using NUnit.Framework;
@@ -16,8 +18,8 @@ public class TestFragmentExpander
             .Build();
 
         var fragmentData = new RecordBatch.Builder()
-            .Append("x", false, new Int32Array.Builder().Append(new[] {0, 1, 2, 3, 4}))
-            .Append("y", false, new Int32Array.Builder().Append(new[] {5, 6, 7, 8, 9}))
+            .Append("x", false, new Int32Array.Builder().Append(new[] { 0, 1, 2, 3, 4 }))
+            .Append("y", false, new Int32Array.Builder().Append(new[] { 5, 6, 7, 8, 9 }))
             .Build();
 
         var expander = new FragmentExpander(datasetSchema);
