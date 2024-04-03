@@ -1,9 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Apache.Arrow;
 using Apache.Arrow.Ipc;
 using ParquetSharp.Arrow;
+using ParquetSharp.Dataset.Filter;
 
 namespace ParquetSharp.Dataset;
 
@@ -20,8 +22,14 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
         Schema = schema;
         _fragmentEnumerator = new FragmentEnumerator(directory, partitioning, filter);
         _fragmentExpander = new FragmentExpander(schema);
+        _filter = filter;
         _readerProperties = readerProperties;
         _arrowReaderProperties = arrowReaderProperties;
+        _requiredFields = new HashSet<string>(schema.FieldsList.Select(f => f.Name));
+        if (_filter != null)
+        {
+            _requiredFields.UnionWith(_filter.Columns());
+        }
     }
 
     public async ValueTask<RecordBatch?> ReadNextRecordBatchAsync(CancellationToken cancellationToken = new CancellationToken())
@@ -34,8 +42,15 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
             var nextBatch = await _currentFragmentReader.ReadNextRecordBatchAsync(cancellationToken);
             if (nextBatch != null)
             {
+                var filtered = FilterBatch(nextBatch);
+                if (filtered == null)
+                {
+                    // All rows excluded
+                    continue;
+                }
+
                 return _fragmentExpander.ExpandBatch(
-                    nextBatch, _fragmentEnumerator.Current.PartitionInformation);
+                    filtered, _fragmentEnumerator.Current.PartitionInformation);
             }
             else
             {
@@ -44,6 +59,39 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Return a record batch with rows filtered out using the current filter.
+    /// Returns null if all rows are excluded.
+    /// </summary>
+    private RecordBatch? FilterBatch(RecordBatch recordBatch)
+    {
+        if (_filter == null)
+        {
+            return recordBatch;
+        }
+
+        var filterMask = _filter.ComputeMask(recordBatch);
+        if (filterMask == null)
+        {
+            return recordBatch;
+        }
+
+        if (filterMask.IncludedCount == 0)
+        {
+            return null;
+        }
+
+        var arrays = new List<IArrowArray>();
+        for (var colIdx = 0; colIdx < recordBatch.ColumnCount; ++colIdx)
+        {
+            var filterApplier = new ArrayMaskApplier(filterMask);
+            recordBatch.Column(colIdx).Accept(filterApplier);
+            arrays.Add(filterApplier.MaskedArray);
+        }
+
+        return new RecordBatch(recordBatch.Schema, arrays, filterMask.IncludedCount);
     }
 
     public void Dispose()
@@ -61,7 +109,7 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
         {
             _currentFileReader = new FileReader(
                 _fragmentEnumerator.Current.FilePath, _readerProperties, _arrowReaderProperties);
-            var columnIndices = GetFileColumnIndices(_currentFileReader, Schema);
+            var columnIndices = GetFileColumnIndices(_currentFileReader);
             _currentFragmentReader = _currentFileReader.GetRecordBatchReader(columns: columnIndices);
         }
         else
@@ -71,16 +119,15 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
         }
     }
 
-    private static int[] GetFileColumnIndices(FileReader fileReader, Apache.Arrow.Schema schema)
+    private int[] GetFileColumnIndices(FileReader fileReader)
     {
-        var fileSchema = fileReader.Schema;
+        var fileFields = fileReader.Schema.FieldsList;
         var columnIndices = new List<int>();
-        foreach (var field in schema.FieldsList)
+        for (var fieldIdx = 0; fieldIdx < fileFields.Count; ++fieldIdx)
         {
-            // Field may come from the partition information rather than the data file
-            if (fileSchema.FieldsLookup.Contains(field.Name))
+            if (_requiredFields.Contains(fileFields[fieldIdx].Name))
             {
-                columnIndices.Add(fileSchema.GetFieldIndex(field.Name));
+                columnIndices.Add(fieldIdx);
             }
         }
 
@@ -90,9 +137,11 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
     public Apache.Arrow.Schema Schema { get; }
 
     private readonly FragmentEnumerator _fragmentEnumerator;
+    private readonly IFilter? _filter;
     private readonly ReaderProperties? _readerProperties;
     private readonly ArrowReaderProperties? _arrowReaderProperties;
     private readonly FragmentExpander _fragmentExpander;
+    private readonly HashSet<string> _requiredFields;
     private IArrowArrayStream? _currentFragmentReader = null;
     private FileReader? _currentFileReader = null;
 }
