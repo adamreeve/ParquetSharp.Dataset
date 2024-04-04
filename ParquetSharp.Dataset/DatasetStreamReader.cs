@@ -26,9 +26,11 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
         _readerProperties = readerProperties;
         _arrowReaderProperties = arrowReaderProperties;
         _requiredFields = new HashSet<string>(schema.FieldsList.Select(f => f.Name));
+        _rowGroupSelector = null;
         if (_filter != null)
         {
             _requiredFields.UnionWith(_filter.Columns());
+            _rowGroupSelector = new RowGroupSelector(_filter);
         }
     }
 
@@ -73,7 +75,7 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
         }
 
         var filterMask = _filter.ComputeMask(recordBatch);
-        if (filterMask == null)
+        if (filterMask == null || filterMask.IncludedCount == recordBatch.Length)
         {
             return recordBatch;
         }
@@ -83,7 +85,7 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
             return null;
         }
 
-        var arrays = new List<IArrowArray>();
+        var arrays = new List<IArrowArray>(recordBatch.ColumnCount);
         for (var colIdx = 0; colIdx < recordBatch.ColumnCount; ++colIdx)
         {
             var filterApplier = new ArrayMaskApplier(filterMask);
@@ -109,8 +111,12 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
         {
             _currentFileReader = new FileReader(
                 _fragmentEnumerator.Current.FilePath, _readerProperties, _arrowReaderProperties);
+
+            var rowGroups = _rowGroupSelector?.GetRequiredRowGroups(_currentFileReader);
             var columnIndices = GetFileColumnIndices(_currentFileReader);
-            _currentFragmentReader = _currentFileReader.GetRecordBatchReader(columns: columnIndices);
+
+            _currentFragmentReader = _currentFileReader.GetRecordBatchReader(
+                rowGroups: rowGroups, columns: columnIndices);
         }
         else
         {
@@ -122,7 +128,7 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
     private int[] GetFileColumnIndices(FileReader fileReader)
     {
         var fileFields = fileReader.Schema.FieldsList;
-        var columnIndices = new List<int>();
+        var columnIndices = new List<int>(_requiredFields.Count);
         for (var fieldIdx = 0; fieldIdx < fileFields.Count; ++fieldIdx)
         {
             if (_requiredFields.Contains(fileFields[fieldIdx].Name))
@@ -141,6 +147,7 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
     private readonly ReaderProperties? _readerProperties;
     private readonly ArrowReaderProperties? _arrowReaderProperties;
     private readonly FragmentExpander _fragmentExpander;
+    private readonly RowGroupSelector? _rowGroupSelector;
     private readonly HashSet<string> _requiredFields;
     private IArrowArrayStream? _currentFragmentReader = null;
     private FileReader? _currentFileReader = null;
