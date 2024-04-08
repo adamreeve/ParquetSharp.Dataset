@@ -14,7 +14,7 @@ public sealed class HivePartitioning : IPartitioning
 {
     public sealed class Factory : IPartitioningFactory
     {
-        public void Inspect(string[] pathComponents)
+        public void Inspect(IReadOnlyList<string> pathComponents)
         {
             foreach (var dirName in pathComponents)
             {
@@ -59,17 +59,71 @@ public sealed class HivePartitioning : IPartitioning
         private readonly Dictionary<string, Field> _observedFields = new();
     }
 
+    private sealed class DirectoryComparer : StringComparer
+    {
+        public DirectoryComparer(Apache.Arrow.Schema schema)
+        {
+            _schema = schema;
+            _baseComparer = StringComparer.Ordinal;
+        }
+
+        public override int Compare(string? x, string? y)
+        {
+            if (x == null || y == null)
+            {
+                return _baseComparer.Compare(x, y);
+            }
+
+            var (xField, xValue) = ParseDirectoryName(x);
+            var (yField, yValue) = ParseDirectoryName(y);
+            var fieldComparison = _baseComparer.Compare(xField, yField);
+            if (fieldComparison != 0)
+            {
+                return fieldComparison;
+            }
+
+            var field = _schema.GetFieldByName(xField);
+            if (field == null)
+            {
+                throw new Exception($"Invalid field name '{xField}' for partitioning");
+            }
+
+            if (field.DataType.IsIntegral() &&
+                long.TryParse(xValue, out var xLong) &&
+                long.TryParse(yValue, out var yLong))
+            {
+                return xLong.CompareTo(yLong);
+            }
+
+            return _baseComparer.Compare(xValue, yValue);
+        }
+
+        public override bool Equals(string? x, string? y)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override int GetHashCode(string obj)
+        {
+            throw new NotImplementedException();
+        }
+
+        private readonly Apache.Arrow.Schema _schema;
+        private readonly StringComparer _baseComparer;
+    }
+
     public HivePartitioning(Apache.Arrow.Schema schema)
     {
         Schema = schema ?? throw new ArgumentNullException(nameof(schema));
+        _comparer = new DirectoryComparer(schema);
     }
 
     public Apache.Arrow.Schema Schema { get; }
 
-    public PartitionInformation Parse(string[] pathComponents)
+    public PartitionInformation Parse(IReadOnlyList<string> pathComponents)
     {
-        var arrays = new List<IArrowArray>(pathComponents.Length);
-        var fields = new List<Field>(pathComponents.Length);
+        var arrays = new List<IArrowArray>(pathComponents.Count);
+        var fields = new List<Field>(pathComponents.Count);
 
         foreach (var dirName in pathComponents)
         {
@@ -109,6 +163,11 @@ public sealed class HivePartitioning : IPartitioning
         return new PartitionInformation(new RecordBatch(schemaBuilder.Build(), arrays, 1));
     }
 
+    public void SortDirectories(IReadOnlyList<string> parentPath, string[] directoryNames)
+    {
+        System.Array.Sort(directoryNames, _comparer);
+    }
+
     private static (string, string) ParseDirectoryName(string directoryName)
     {
         var split = directoryName.Split('=', 2);
@@ -124,4 +183,5 @@ public sealed class HivePartitioning : IPartitioning
     }
 
     private const string HiveNullValueFallback = "__HIVE_DEFAULT_PARTITION__";
+    private readonly StringComparer _comparer;
 }
