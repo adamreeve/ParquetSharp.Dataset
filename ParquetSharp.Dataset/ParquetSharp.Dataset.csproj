@@ -15,7 +15,7 @@
     <PackageTags>dataset apache parquet hive partitioned partitioning gresearch g-research .net c#</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/G-Research/ParquetSharp.Dataset</RepositoryUrl>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
