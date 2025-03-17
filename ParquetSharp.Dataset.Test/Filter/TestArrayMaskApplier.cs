@@ -514,12 +514,21 @@ public class TestArrayMaskApplier
 
             for (var fieldIdx = 0; fieldIdx < sourceArray.Fields.Count; ++fieldIdx)
             {
-                // StructArray.Fields doesn't account for offset and length, so we need to slice here,
-                // see https://github.com/apache/arrow/issues/40790
-                var slicedSource = ArrowArrayFactory.Slice(sourceArray.Fields[fieldIdx], sourceArray.Offset, sourceArray.Length);
-                var slicedField = ArrowArrayFactory.Slice(array.Fields[fieldIdx], array.Offset, array.Length);
-                var fieldValidator = new MaskedArrayValidator(slicedSource, _mask);
-                slicedField.Accept(fieldValidator);
+                // The behaviour of slicing a StructArray changed between Arrow versions, so we need to possibly
+                // handle when fields weren't sliced. See https://github.com/apache/arrow/pull/40805
+                var field = sourceArray.Fields[fieldIdx];
+                if (field.Length != sourceArray.Length)
+                {
+                    var slicedSource = ArrowArrayFactory.Slice(sourceArray.Fields[fieldIdx], sourceArray.Offset, sourceArray.Length);
+                    var slicedField = ArrowArrayFactory.Slice(array.Fields[fieldIdx], array.Offset, array.Length);
+                    var fieldValidator = new MaskedArrayValidator(slicedSource, _mask);
+                    slicedField.Accept(fieldValidator);
+                }
+                else
+                {
+                    var fieldValidator = new MaskedArrayValidator(sourceArray.Fields[fieldIdx], _mask);
+                    array.Fields[fieldIdx].Accept(fieldValidator);
+                }
             }
         }
 
