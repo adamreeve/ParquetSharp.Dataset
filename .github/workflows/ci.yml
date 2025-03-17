@@ -85,8 +85,16 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         dotnet: [net6.0, net7.0]
+        arrow: [15.0.1]
+        include:
+          - os: ubuntu-latest
+            dotnet: net7.0
+            arrow: 18.1.0
+          - os: ubuntu-latest
+            dotnet: net7.0
+            arrow: 19.0.1
       fail-fast: false
-    name: Test NuGet package (.NET ${{ matrix.dotnet }} on ${{ matrix.os }})
+    name: Test NuGet package (.NET ${{ matrix.dotnet }} on ${{ matrix.os }} with Arrow ${{ matrix.arrow }})
     runs-on: ${{ matrix.os }}
     needs: build-nuget
     steps:
@@ -114,6 +122,9 @@ jobs:
       run: |
         dotnet remove ParquetSharp.Dataset.Test reference ParquetSharp.Dataset/ParquetSharp.Dataset.csproj
         dotnet add ParquetSharp.Dataset.Test package ParquetSharp.Dataset -v ${{ needs.build-nuget.outputs.version }}
+    - name: Install Apache Arrow version
+      run: |
+        dotnet add ParquetSharp.Dataset.Test package Apache.Arrow -v ${{ matrix.arrow }}
     - name: Build & Run .NET unit tests
       run: dotnet test ParquetSharp.Dataset.Test --configuration=Release --framework ${{ matrix.dotnet }}
 
