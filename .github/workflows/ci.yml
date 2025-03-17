@@ -21,7 +21,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 7.0.x
+          dotnet-version: 8.0.x
       - name: Code formating check
         run: |
           dotnet tool restore
@@ -53,7 +53,7 @@ jobs:
     - name: Setup .NET SDK
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 7.0.x
+        dotnet-version: 8.0.x
     - name: Get version
       id: get-version
       shell: pwsh
@@ -84,14 +84,14 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        dotnet: [net6.0, net7.0]
+        dotnet: [net8.0, net9.0]
         arrow: [15.0.1]
         include:
           - os: ubuntu-latest
-            dotnet: net7.0
+            dotnet: net8.0
             arrow: 18.1.0
           - os: ubuntu-latest
-            dotnet: net7.0
+            dotnet: net8.0
             arrow: 19.0.1
       fail-fast: false
     name: Test NuGet package (.NET ${{ matrix.dotnet }} on ${{ matrix.os }} with Arrow ${{ matrix.arrow }})
@@ -105,15 +105,15 @@ jobs:
       with:
         name: nuget-package
         path: nuget
-    - name: Setup .NET 6 SDK
-      if: matrix.dotnet == 'net6.0'
+    - name: Setup .NET 8 SDK
+      if: matrix.dotnet == 'net8.0'
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 6.0.x
-    - name: Setup .NET 7 SDK
+        dotnet-version: 8.0.x
+    - name: Setup .NET 9 SDK
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 7.0.x
+        dotnet-version: 9.0.x
     - name: Add local NuGet feed
       run: |
         dotnet new nugetconfig
