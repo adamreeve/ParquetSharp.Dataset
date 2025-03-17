@@ -141,7 +141,7 @@ internal sealed class IntRangeEvaluator :
     }
 
     private static void ComputeMask<T, TArray>(byte[] mask, TArray array, T rangeStart, T? rangeEnd)
-        where T : struct, IComparable<T>
+        where T : struct, IComparable<T>, IEquatable<T>
         where TArray : PrimitiveArray<T>
     {
         if (array.NullCount == 0)

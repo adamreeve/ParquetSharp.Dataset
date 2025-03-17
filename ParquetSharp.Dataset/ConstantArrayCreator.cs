@@ -118,7 +118,7 @@ internal sealed class ConstantArrayCreator
     }
 
     private ArrayData VisitPrimitiveArray<T, TArray>(TArray array)
-        where T : struct
+        where T : struct, IEquatable<T>
         where TArray : PrimitiveArray<T>
     {
         var value = array.GetValue(0);

@@ -229,7 +229,7 @@ public class ArrayMaskApplier :
     }
 
     private void VisitPrimitiveArray<T, TArray>(TArray array, Func<ArrayData, TArray> arrayConstructor)
-        where T : struct
+        where T : struct, IEquatable<T>
         where TArray : PrimitiveArray<T>
     {
         var valueBuffer = new ArrowBuffer.Builder<T>(_includedCount);
