@@ -158,7 +158,7 @@ public class TestIntFilter
     }
 
     private static void TestComputeIntEqualityMask<T, TArray, TBuilder>(long filterValue, T[] values, Func<T, long> checkedCast)
-        where T : struct
+        where T : struct, IEquatable<T>
         where TArray : PrimitiveArray<T>
         where TBuilder : PrimitiveArrayBuilder<T, TArray, TBuilder>, new()
     {
@@ -195,7 +195,7 @@ public class TestIntFilter
     }
 
     private static void TestComputeIntRangeMask<T, TArray, TBuilder>(long rangeStart, long rangeEnd, T[] values, Func<T, long> checkedCast)
-        where T : struct
+        where T : struct, IEquatable<T>
         where TArray : PrimitiveArray<T>
         where TBuilder : PrimitiveArrayBuilder<T, TArray, TBuilder>, new()
     {
