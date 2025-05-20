@@ -14,7 +14,7 @@ public class TestDateFilter<TArray, TUnderlying, TBuilder>
     where TBuilder : DateArrayBuilder<TUnderlying, TArray, TBuilder>, new()
 {
     [Test]
-    public void TestComputeMask()
+    public void TestDateRangeComputeMask()
     {
         var rangeStart = new DateOnly(2024, 2, 1);
         var rangeEnd = new DateOnly(2024, 2, 11);
@@ -42,6 +42,91 @@ public class TestDateFilter<TArray, TUnderlying, TBuilder>
             Assert.That(BitUtility.GetBit(mask.Mask.Span, i), Is.EqualTo(expectIncluded));
         }
     }
+
+    [Test]
+    public void TestDateEqComputeMask([Values] bool includeNull)
+    {
+        TestDateComparisonComputeMask(
+            Col.Named("date").IsEqualTo(new DateOnly(2024, 2, 1)),
+            date => date == new DateOnly(2024, 2, 1),
+            includeNull);
+    }
+
+    [Test]
+    public void TestDateGtComputeMask([Values] bool includeNull)
+    {
+        TestDateComparisonComputeMask(
+            Col.Named("date").IsGreaterThan(new DateOnly(2024, 2, 1)),
+            date => date > new DateOnly(2024, 2, 1),
+            includeNull);
+    }
+
+    [Test]
+    public void TestDateGtEqComputeMask([Values] bool includeNull)
+    {
+        TestDateComparisonComputeMask(
+            Col.Named("date").IsGreaterThanOrEqual(new DateOnly(2024, 2, 1)),
+            date => date >= new DateOnly(2024, 2, 1),
+            includeNull);
+    }
+
+    [Test]
+    public void TestDateLtComputeMask([Values] bool includeNull)
+    {
+        TestDateComparisonComputeMask(
+            Col.Named("date").IsLessThan(new DateOnly(2024, 2, 1)),
+            date => date < new DateOnly(2024, 2, 1),
+            includeNull);
+    }
+
+    [Test]
+    public void TestDateLtEqComputeMask([Values] bool includeNull)
+    {
+        TestDateComparisonComputeMask(
+            Col.Named("date").IsLessThanOrEqual(new DateOnly(2024, 2, 1)),
+            date => date <= new DateOnly(2024, 2, 1),
+            includeNull);
+    }
+
+    private static void TestDateComparisonComputeMask(IFilter filter, Func<DateOnly, bool> expectIncluded, bool includeNull)
+    {
+        var dateValues = Enumerable.Range(0, 100)
+            .Select(i => new DateOnly(2024, 1, 1).AddDays(i))
+            .ToArray();
+        var dateArrayBuilder = new TBuilder();
+        if (includeNull)
+        {
+            dateArrayBuilder.AppendNull();
+        }
+
+        var dateArray = dateArrayBuilder
+            .AppendRange(dateValues)
+            .Build();
+
+        var recordBatch = new RecordBatch.Builder()
+            .Append("date", includeNull, dateArray)
+            .Build();
+
+        var expectedMask = new List<bool>();
+        if (includeNull)
+        {
+            expectedMask.Add(false);
+        }
+
+        foreach (var dateValue in dateValues)
+        {
+            expectedMask.Add(expectIncluded(dateValue));
+        }
+
+        var mask = filter.ComputeMask(recordBatch);
+
+        Assert.That(mask, Is.Not.Null);
+        Assert.That(mask.IncludedCount, Is.GreaterThan(0));
+        for (var i = 0; i < expectedMask.Count; ++i)
+        {
+            Assert.That(BitUtility.GetBit(mask.Mask.Span, i), Is.EqualTo(expectedMask[i]));
+        }
+    }
 }
 
 [TestFixture]
@@ -65,7 +150,7 @@ public class TestDateFilter
     }
 
     [Test]
-    public void TestIncludeRowGroup()
+    public void TestDateRangeIncludeRowGroup()
     {
         var filter = Col.Named("date").IsInRange(new DateOnly(2024, 2, 1), new DateOnly(2024, 2, 11));
 
@@ -87,6 +172,51 @@ public class TestDateFilter
             var includeRowGroup = filter.IncludeRowGroup(statistics);
 
             Assert.That(includeRowGroup, Is.EqualTo(expectInclude));
+        }
+    }
+
+    [Test]
+    public void TestDateComparisonIncludeRowGroup()
+    {
+        var statisticsRanges = new[]
+        {
+            (new DateOnly(2025, 1, 1), new DateOnly(2025, 1, 31)),
+            (new DateOnly(2025, 2, 1), new DateOnly(2025, 2, 28)),
+            (new DateOnly(2025, 3, 1), new DateOnly(2025, 3, 31)),
+        };
+        var statistics = statisticsRanges.Select(minMax => new Dictionary<string, LogicalStatistics>
+        {
+            { "date", new LogicalStatistics<DateOnly>(minMax.Item1, minMax.Item2) }
+        }).ToArray();
+
+        {
+            var filter = Col.Named("date").IsEqualTo(new DateOnly(2025, 2, 2));
+            var includedGroups = statistics.Select(s => filter.IncludeRowGroup(s)).ToArray();
+            Assert.That(includedGroups, Is.EqualTo(new[] { false, true, false }));
+        }
+
+        {
+            var filter = Col.Named("date").IsGreaterThan(new DateOnly(2025, 1, 31));
+            var includedGroups = statistics.Select(s => filter.IncludeRowGroup(s)).ToArray();
+            Assert.That(includedGroups, Is.EqualTo(new[] { false, true, true }));
+        }
+
+        {
+            var filter = Col.Named("date").IsGreaterThanOrEqual(new DateOnly(2025, 2, 28));
+            var includedGroups = statistics.Select(s => filter.IncludeRowGroup(s)).ToArray();
+            Assert.That(includedGroups, Is.EqualTo(new[] { false, true, true }));
+        }
+
+        {
+            var filter = Col.Named("date").IsLessThan(new DateOnly(2025, 3, 1));
+            var includedGroups = statistics.Select(s => filter.IncludeRowGroup(s)).ToArray();
+            Assert.That(includedGroups, Is.EqualTo(new[] { true, true, false }));
+        }
+
+        {
+            var filter = Col.Named("date").IsLessThanOrEqual(new DateOnly(2025, 2, 1));
+            var includedGroups = statistics.Select(s => filter.IncludeRowGroup(s)).ToArray();
+            Assert.That(includedGroups, Is.EqualTo(new[] { true, true, false }));
         }
     }
 }
