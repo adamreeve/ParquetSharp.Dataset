@@ -31,9 +31,12 @@ public class ArrayMaskApplier :
     , IArrowArrayVisitor<StringArray>
     , IArrowArrayVisitor<BinaryArray>
     , IArrowArrayVisitor<FixedSizeBinaryArray>
+    , IArrowArrayVisitor<LargeStringArray>
+    , IArrowArrayVisitor<LargeBinaryArray>
     , IArrowArrayVisitor<NullArray>
     , IArrowArrayVisitor<DictionaryArray>
     , IArrowArrayVisitor<ListArray>
+    , IArrowArrayVisitor<LargeListArray>
     , IArrowArrayVisitor<StructArray>
     , IArrowArrayVisitor<MapArray>
 {
@@ -108,6 +111,10 @@ public class ArrayMaskApplier :
     public void Visit(FixedSizeBinaryArray array) => VisitFixedSizeBinaryArray<FixedSizeBinaryArray>(array, arrayData => new FixedSizeBinaryArray(arrayData));
 
     public void Visit(BinaryArray array) => VisitBinaryArray<BinaryArray>(array, arrayData => new BinaryArray(arrayData));
+
+    public void Visit(LargeStringArray array) => VisitLargeBinaryArray<LargeStringArray>(array, arrayData => new LargeStringArray(arrayData));
+
+    public void Visit(LargeBinaryArray array) => VisitLargeBinaryArray<LargeBinaryArray>(array, arrayData => new LargeBinaryArray(arrayData));
 
     public void Visit(NullArray array)
     {
@@ -196,6 +203,54 @@ public class ArrayMaskApplier :
         var arrayData = new ArrayData(array.Data.DataType, _includedCount, validityBuffer.UnsetBitCount, 0,
             new[] { validityBuffer.Build(), valueOffsetsBuilder.Build() }, new[] { valuesArray.Data });
         _maskedArray = arrayConstructor(arrayData);
+    }
+
+    public void Visit(LargeListArray array)
+    {
+        var valuesMaskBuilder = new ArrowBuffer.BitmapBuilder(array.Values.Length);
+        var validityBuffer = new ArrowBuffer.BitmapBuilder(_includedCount);
+        var valueOffsetsBuilder = new ArrowBuffer.Builder<long>(_includedCount + 1);
+
+        valueOffsetsBuilder.Append(0);
+
+        long outputValuesOffset = 0;
+        var inputValuesOffset = array.ValueOffsets[0];
+        if (inputValuesOffset > 0)
+        {
+            valuesMaskBuilder.AppendRange(false, Convert.ToInt32(inputValuesOffset));
+        }
+
+        for (var i = 0; i < array.Length; ++i)
+        {
+            var included = BitUtility.GetBit(_mask.Span, i);
+            var nextOffset = array.ValueOffsets[i + 1];
+            var length = Convert.ToInt32(nextOffset - inputValuesOffset);
+            if (length > 0)
+            {
+                valuesMaskBuilder.AppendRange(included, length);
+            }
+
+            inputValuesOffset = nextOffset;
+
+            if (included)
+            {
+                validityBuffer.Append(array.IsValid(i));
+                outputValuesOffset += length;
+                valueOffsetsBuilder.Append(outputValuesOffset);
+            }
+        }
+
+        var valuesMaskApplier = new ArrayMaskApplier(valuesMaskBuilder.Build().Memory, valuesMaskBuilder.SetBitCount);
+        array.Values.Accept(valuesMaskApplier);
+        var valuesArray = valuesMaskApplier.MaskedArray;
+
+        _maskedArray = new LargeListArray(
+            array.Data.DataType,
+            _includedCount,
+            valueOffsetsBuilder.Build(),
+            valuesArray,
+            validityBuffer.Build(),
+            validityBuffer.UnsetBitCount);
     }
 
     public void Visit(StructArray array)
@@ -305,7 +360,7 @@ public class ArrayMaskApplier :
         where TArray : BinaryArray
     {
         var dataBuffer = new ArrowBuffer.Builder<byte>();
-        var valueOffsetsBuffer = new ArrowBuffer.Builder<int>(_includedCount);
+        var valueOffsetsBuffer = new ArrowBuffer.Builder<int>(_includedCount + 1);
         var validityBuffer = new ArrowBuffer.BitmapBuilder(_includedCount);
 
         var sourceOffsets = array.ValueOffsets;
@@ -322,6 +377,42 @@ public class ArrayMaskApplier :
                 {
                     var sourceOffset = sourceOffsets[i];
                     var length = sourceOffsets[i + 1] - sourceOffset;
+                    dataBuffer.Append(sourceValues.Slice(sourceOffset, length));
+                    offset += length;
+                }
+
+                validityBuffer.Append(isValid);
+                valueOffsetsBuffer.Append(offset);
+            }
+        }
+
+        var arrayData = new ArrayData(
+            array.Data.DataType, _includedCount, validityBuffer.UnsetBitCount, 0,
+            new[] { validityBuffer.Build(), valueOffsetsBuffer.Build(), dataBuffer.Build() });
+        _maskedArray = arrayConstructor(arrayData);
+    }
+
+    private void VisitLargeBinaryArray<TArray>(TArray array, Func<ArrayData, TArray> arrayConstructor)
+        where TArray : LargeBinaryArray
+    {
+        var dataBuffer = new ArrowBuffer.Builder<byte>();
+        var valueOffsetsBuffer = new ArrowBuffer.Builder<long>(_includedCount + 1);
+        var validityBuffer = new ArrowBuffer.BitmapBuilder(_includedCount);
+
+        var sourceOffsets = array.ValueOffsets;
+        var sourceValues = array.ValueBuffer.Span;
+
+        long offset = 0;
+        valueOffsetsBuffer.Append(0);
+        for (var i = 0; i < array.Length; ++i)
+        {
+            if (BitUtility.GetBit(_mask.Span, i))
+            {
+                var isValid = array.IsValid(i);
+                if (isValid)
+                {
+                    var sourceOffset = Convert.ToInt32(sourceOffsets[i]);
+                    var length = Convert.ToInt32(sourceOffsets[i + 1] - sourceOffset);
                     dataBuffer.Append(sourceValues.Slice(sourceOffset, length));
                     offset += length;
                 }

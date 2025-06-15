@@ -164,11 +164,14 @@ public class TestArrayMaskApplier
             BuildArray<BinaryArray, BinaryArray.Builder>(
                 new BinaryArray.Builder(), numRows, random,
                 (builder, rand) => builder.Append(RandomBytes(rand).AsSpan())),
+            BuildLargeBinaryArray(numRows, random),
+            BuildLargeStringArray(numRows, random),
             BuildArray<NullArray, NullArray.Builder>(
                 new NullArray.Builder(), numRows, random,
                 (builder, _) => builder.AppendNull()),
             BuildDictionaryArray(numRows, random),
             BuildListArray(numRows, random),
+            BuildLargeListArray(numRows, random),
             BuildStructArray(numRows, random),
             BuildMapArray(numRows, random),
         };
@@ -294,6 +297,48 @@ public class TestArrayMaskApplier
         return builder.Build();
     }
 
+    private static IArrowArray BuildLargeListArray(int numRows, Random random)
+    {
+        var valuesBuilder = new Int64Array.Builder();
+        var offsetBuffer = new ArrowBuffer.Builder<long>();
+        var validityBuffer = new ArrowBuffer.BitmapBuilder();
+
+        long offset = 0;
+        offsetBuffer.Append(offset);
+        for (var rowIdx = 0; rowIdx < numRows; ++rowIdx)
+        {
+            if (random.NextDouble() < 0.1)
+            {
+                validityBuffer.Append(false);
+                offsetBuffer.Append(offset);
+            }
+            else
+            {
+                var listLength = random.NextInt64(0, 10);
+                for (var itemIdx = 0; itemIdx < listLength; ++itemIdx)
+                {
+                    if (random.NextDouble() < 0.1)
+                    {
+                        valuesBuilder.AppendNull();
+                    }
+                    else
+                    {
+                        valuesBuilder.Append(random.NextInt64(-100, 100));
+                    }
+                }
+
+                offset += listLength;
+                offsetBuffer.Append(offset);
+                validityBuffer.Append(true);
+            }
+        }
+
+        return new LargeListArray(
+            new LargeListType(new Int64Type()), numRows,
+            offsetBuffer.Build(), valuesBuilder.Build(), validityBuffer.Build(),
+            validityBuffer.UnsetBitCount);
+    }
+
     private static IArrowArray BuildStructArray(int numRows, Random random)
     {
         var dataType = new StructType(new Field[]
@@ -360,6 +405,51 @@ public class TestArrayMaskApplier
         return builder.Build();
     }
 
+    private static IArrowArray BuildLargeStringArray(int numRows, Random random)
+    {
+        var (offsetBuffer, valueBuffer, validityBuffer, validCount) = GetLargeStringArrayData(numRows, random);
+        return new LargeStringArray(numRows, offsetBuffer, valueBuffer, validityBuffer, validCount);
+    }
+
+    private static IArrowArray BuildLargeBinaryArray(int numRows, Random random)
+    {
+        var (offsetBuffer, valueBuffer, validityBuffer, validCount) = GetLargeStringArrayData(numRows, random);
+        return new LargeBinaryArray(LargeBinaryType.Default, numRows, offsetBuffer, valueBuffer, validityBuffer, validCount);
+    }
+
+    private static (ArrowBuffer, ArrowBuffer, ArrowBuffer, int) GetLargeStringArrayData(int numRows, Random random)
+    {
+        var valueBuffer = new ArrowBuffer.Builder<byte>();
+        var offsetBuffer = new ArrowBuffer.Builder<long>();
+        var validityBuffer = new ArrowBuffer.BitmapBuilder();
+
+        var stringValues = new[] { "Hello", "world", "abc", "123", "", "4567890" };
+        var byteValues = stringValues
+            .Select(value => LargeStringArray.DefaultEncoding.GetBytes(value))
+            .ToArray();
+
+        long offset = 0;
+        offsetBuffer.Append(offset);
+        for (var rowIdx = 0; rowIdx < numRows; ++rowIdx)
+        {
+            if (random.NextDouble() < 0.1)
+            {
+                validityBuffer.Append(false);
+                offsetBuffer.Append(offset);
+            }
+            else
+            {
+                var bytes = byteValues[random.Next(byteValues.Length)];
+                valueBuffer.Append(bytes);
+                offset += bytes.Length;
+                offsetBuffer.Append(offset);
+                validityBuffer.Append(true);
+            }
+        }
+
+        return (offsetBuffer.Build(), valueBuffer.Build(), validityBuffer.Build(), validityBuffer.UnsetBitCount);
+    }
+
     private sealed class MaskedArrayValidator : IArrowArrayVisitor
         , IArrowArrayVisitor<UInt8Array>
         , IArrowArrayVisitor<UInt16Array>
@@ -382,9 +472,12 @@ public class TestArrayMaskApplier
         , IArrowArrayVisitor<Decimal256Array>
         , IArrowArrayVisitor<StringArray>
         , IArrowArrayVisitor<BinaryArray>
+        , IArrowArrayVisitor<LargeStringArray>
+        , IArrowArrayVisitor<LargeBinaryArray>
         , IArrowArrayVisitor<NullArray>
         , IArrowArrayVisitor<DictionaryArray>
         , IArrowArrayVisitor<ListArray>
+        , IArrowArrayVisitor<LargeListArray>
         , IArrowArrayVisitor<StructArray>
     {
         public MaskedArrayValidator(IArrowArray sourceArray, FilterMask? mask)
@@ -436,6 +529,10 @@ public class TestArrayMaskApplier
 
         public void Visit(BinaryArray array) => VisitArray(array, (arr, idx) => arr.GetBytes(idx).ToArray());
 
+        public void Visit(LargeStringArray array) => VisitArray(array, (arr, idx) => arr.GetString(idx));
+
+        public void Visit(LargeBinaryArray array) => VisitArray(array, (arr, idx) => arr.GetBytes(idx).ToArray());
+
         public void Visit(NullArray array) => VisitArray(array, (_, _) => (object?)null);
 
         public void Visit(DictionaryArray array)
@@ -456,6 +553,40 @@ public class TestArrayMaskApplier
         public void Visit(ListArray array)
         {
             if (_sourceArray is not ListArray sourceArray)
+            {
+                throw new Exception(
+                    $"Masked array ({array}) does not have the same type as the source array ({_sourceArray})");
+            }
+
+            Assert.That(array.Length, Is.EqualTo(_expectedLength));
+
+            var outputIndex = 0;
+            for (var i = 0; i < sourceArray.Length; ++i)
+            {
+                if (_mask == null || BitUtility.GetBit(_mask.Mask.Span, i))
+                {
+                    var sourceList = sourceArray.GetSlicedValues(i);
+                    var outputList = array.GetSlicedValues(outputIndex);
+                    if (sourceList == null)
+                    {
+                        Assert.That(outputList, Is.Null);
+                    }
+                    else
+                    {
+                        var listValidator = new MaskedArrayValidator(sourceList, mask: null);
+                        outputList.Accept(listValidator);
+                    }
+
+                    outputIndex++;
+                }
+            }
+
+            Assert.That(outputIndex, Is.EqualTo(_expectedLength));
+        }
+
+        public void Visit(LargeListArray array)
+        {
+            if (_sourceArray is not LargeListArray sourceArray)
             {
                 throw new Exception(
                     $"Masked array ({array}) does not have the same type as the source array ({_sourceArray})");
