@@ -97,7 +97,12 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
             arrays.Add(filterApplier.MaskedArray);
         }
 
-        return new RecordBatch(recordBatch.Schema, arrays, filterMask.IncludedCount);
+        var filteredBatch = new RecordBatch(recordBatch.Schema, arrays, filterMask.IncludedCount);
+
+        // Dispose input record batch so its memory can be immediately freed
+        recordBatch.Dispose();
+
+        return filteredBatch;
     }
 
     public void Dispose()
