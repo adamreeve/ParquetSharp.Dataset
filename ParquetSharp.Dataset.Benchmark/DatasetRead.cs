@@ -78,7 +78,10 @@ public class DatasetRead
             using var batchReader = reader.GetRecordBatchReader();
             while (await batchReader.ReadNextRecordBatchAsync() is { } batch)
             {
-                rowsRead += batch.Length;
+                using (batch)
+                {
+                    rowsRead += batch.Length;
+                }
             }
         }
 
@@ -93,7 +96,10 @@ public class DatasetRead
         long rowsRead = 0;
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
-            rowsRead += batch.Length;
+            using (batch)
+            {
+                rowsRead += batch.Length;
+            }
         }
 
         return rowsRead;
@@ -108,7 +114,10 @@ public class DatasetRead
         long rowsRead = 0;
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
-            rowsRead += batch.Length;
+            using (batch)
+            {
+                rowsRead += batch.Length;
+            }
         }
 
         return rowsRead;
@@ -123,7 +132,10 @@ public class DatasetRead
         long rowsRead = 0;
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
-            rowsRead += batch.Length;
+            using (batch)
+            {
+                rowsRead += batch.Length;
+            }
         }
 
         return rowsRead;
@@ -137,7 +149,10 @@ public class DatasetRead
         long rowsRead = 0;
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
-            rowsRead += batch.Length;
+            using (batch)
+            {
+                rowsRead += batch.Length;
+            }
         }
 
         return rowsRead;
@@ -151,7 +166,10 @@ public class DatasetRead
         long rowsRead = 0;
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
-            rowsRead += batch.Length;
+            using (batch)
+            {
+                rowsRead += batch.Length;
+            }
         }
 
         return rowsRead;

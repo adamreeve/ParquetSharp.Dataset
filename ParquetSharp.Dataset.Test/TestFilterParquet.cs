@@ -100,10 +100,13 @@ public static class TestFilterParquet
         var valuesRead = new List<int?>();
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
-            var filteredBatchValues = batch.Column(0) as Int32Array;
-            foreach (var value in filteredBatchValues!)
+            using (batch)
             {
-                valuesRead.Add(value);
+                var filteredBatchValues = batch.Column(0) as Int32Array;
+                foreach (var value in filteredBatchValues!)
+                {
+                    valuesRead.Add(value);
+                }
             }
         }
 

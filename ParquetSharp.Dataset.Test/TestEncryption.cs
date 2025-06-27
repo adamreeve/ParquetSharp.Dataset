@@ -49,7 +49,10 @@ public class TestEncryption
         var rowsRead = 0;
         while (await reader.ReadNextRecordBatchAsync() is { } batch)
         {
-            rowsRead += batch.Length;
+            using (batch)
+            {
+                rowsRead += batch.Length;
+            }
         }
 
         Assert.That(rowsRead, Is.EqualTo(originalBatch.Length));
