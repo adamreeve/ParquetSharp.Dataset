@@ -98,15 +98,13 @@ public static class TestFilterParquet
         var dataset = new DatasetReader(datasetDir.DirectoryPath);
         using var reader = dataset.ToBatches(filter);
         var valuesRead = new List<int?>();
-        while (await reader.ReadNextRecordBatchAsync() is { } batch)
+        while (await reader.ReadNextRecordBatchAsync() is { } batch_)
         {
-            using (batch)
+            using var batch = batch_;
+            var filteredBatchValues = batch.Column(0) as Int32Array;
+            foreach (var value in filteredBatchValues!)
             {
-                var filteredBatchValues = batch.Column(0) as Int32Array;
-                foreach (var value in filteredBatchValues!)
-                {
-                    valuesRead.Add(value);
-                }
+                valuesRead.Add(value);
             }
         }
 

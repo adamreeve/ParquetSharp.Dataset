@@ -47,12 +47,10 @@ public class TestEncryption
         using var reader = dataset.ToBatches();
 
         var rowsRead = 0;
-        while (await reader.ReadNextRecordBatchAsync() is { } batch)
+        while (await reader.ReadNextRecordBatchAsync() is { } batch_)
         {
-            using (batch)
-            {
-                rowsRead += batch.Length;
-            }
+            using var batch = batch_;
+            rowsRead += batch.Length;
         }
 
         Assert.That(rowsRead, Is.EqualTo(originalBatch.Length));
