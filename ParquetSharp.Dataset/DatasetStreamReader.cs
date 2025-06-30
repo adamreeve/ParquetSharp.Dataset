@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -48,7 +49,7 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
             var nextBatch = await _currentFragmentReader.ReadNextRecordBatchAsync(cancellationToken);
             if (nextBatch != null)
             {
-                var filtered = FilterBatch(nextBatch);
+                var filtered = FilterBatch(ref nextBatch);
                 if (filtered == null)
                 {
                     // All rows excluded
@@ -70,9 +71,16 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
     /// <summary>
     /// Return a record batch with rows filtered out using the current filter.
     /// Returns null if all rows are excluded.
+    /// Takes ownership of the input record batch and will dispose it if it
+    /// is filtered.
     /// </summary>
-    private RecordBatch? FilterBatch(RecordBatch recordBatch)
+    private RecordBatch? FilterBatch(ref RecordBatch? recordBatch)
     {
+        if (recordBatch == null)
+        {
+            throw new ArgumentNullException(nameof(recordBatch));
+        }
+
         if (_filter == null)
         {
             return recordBatch;
@@ -101,6 +109,7 @@ internal sealed class DatasetStreamReader : IArrowArrayStream
 
         // Dispose input record batch so its memory can be immediately freed
         recordBatch.Dispose();
+        recordBatch = null;
 
         return filteredBatch;
     }
