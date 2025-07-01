@@ -8,20 +8,24 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        await ReadDataset(args[0], dateFilter: false, idFilter: true);
+        await ReadDataset(args[0], dateFilter: true, idFilter: true);
         //await ReadWithArrow($"{args[0]}/test_data.parquet");
         //await ReadWithPqs($"{args[0]}/test_data.parquet");
     }
 
-    static async Task ReadDataset(string directoryPath, bool dateFilter = false, bool idFilter = false)
+    static async Task ReadDataset(string datasetPath, bool dateFilter = false, bool idFilter = false)
     {
         using var arrowProperties = ArrowReaderProperties.GetDefault();
-        //arrowProperties.PreBuffer = false;
-        var reader = new DatasetReader(directoryPath, arrowReaderProperties: arrowProperties);
+        arrowProperties.PreBuffer = false;
+        using var readerProperties = ReaderProperties.GetDefaultReaderProperties();
+        readerProperties.EnableBufferedStream();
+
+        var reader = new DatasetReader(
+            datasetPath, readerProperties: readerProperties, arrowReaderProperties: arrowProperties);
         IFilter? filter = null;
         if (dateFilter)
         {
-            filter = Col.Named("date").IsEqualTo(new DateOnly(2025, 1, 10));
+            filter = Col.Named("date").IsInRange(new DateOnly(2025, 1, 2), new DateOnly(2025, 1, 4));
         }
 
         if (idFilter)

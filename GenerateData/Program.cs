@@ -17,7 +17,12 @@ public class Program
             columns.Add(new Column<float>($"x{i}"));
         }
 
-        using var writer = new ParquetFileWriter(args[0], columns.ToArray());
+        using var writerProperties = new WriterPropertiesBuilder()
+            .Compression(Compression.Snappy)
+            .DisableDictionary()
+            .Build();
+
+        using var writer = new ParquetFileWriter(args[0], columns.ToArray(), writerProperties);
 
         const int totalRows = 6_624_387;
         const int rowsPerRowGroup = 1024*1024;
