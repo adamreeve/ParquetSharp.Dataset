@@ -76,8 +76,9 @@ public class DatasetRead
         {
             using var reader = new FileReader(filePath);
             using var batchReader = reader.GetRecordBatchReader();
-            while (await batchReader.ReadNextRecordBatchAsync() is { } batch)
+            while (await batchReader.ReadNextRecordBatchAsync() is { } batch_)
             {
+                using var batch = batch_;
                 rowsRead += batch.Length;
             }
         }
@@ -91,8 +92,9 @@ public class DatasetRead
         var dataset = new DatasetReader(_datasetDirectory, new HivePartitioning.Factory());
         using var reader = dataset.ToBatches();
         long rowsRead = 0;
-        while (await reader.ReadNextRecordBatchAsync() is { } batch)
+        while (await reader.ReadNextRecordBatchAsync() is { } batch_)
         {
+            using var batch = batch_;
             rowsRead += batch.Length;
         }
 
@@ -106,8 +108,9 @@ public class DatasetRead
         var filter = Col.Named("group").IsEqualTo("group-2").And(Col.Named("day").IsEqualTo(2));
         using var reader = dataset.ToBatches(filter);
         long rowsRead = 0;
-        while (await reader.ReadNextRecordBatchAsync() is { } batch)
+        while (await reader.ReadNextRecordBatchAsync() is { } batch_)
         {
+            using var batch = batch_;
             rowsRead += batch.Length;
         }
 
@@ -121,8 +124,9 @@ public class DatasetRead
         var filter = Col.Named("id").IsEqualTo(5);
         using var reader = dataset.ToBatches(filter);
         long rowsRead = 0;
-        while (await reader.ReadNextRecordBatchAsync() is { } batch)
+        while (await reader.ReadNextRecordBatchAsync() is { } batch_)
         {
+            using var batch = batch_;
             rowsRead += batch.Length;
         }
 
@@ -135,8 +139,9 @@ public class DatasetRead
         var dataset = new DatasetReader(_datasetDirectory, new HivePartitioning.Factory());
         using var reader = dataset.ToBatches(columns: new[] { "id", "ints", "doubles" });
         long rowsRead = 0;
-        while (await reader.ReadNextRecordBatchAsync() is { } batch)
+        while (await reader.ReadNextRecordBatchAsync() is { } batch_)
         {
+            using var batch = batch_;
             rowsRead += batch.Length;
         }
 
@@ -149,8 +154,9 @@ public class DatasetRead
         var dataset = new DatasetReader(_datasetDirectory, new HivePartitioning.Factory());
         using var reader = dataset.ToBatches(columns: new[] { "ints" });
         long rowsRead = 0;
-        while (await reader.ReadNextRecordBatchAsync() is { } batch)
+        while (await reader.ReadNextRecordBatchAsync() is { } batch_)
         {
+            using var batch = batch_;
             rowsRead += batch.Length;
         }
 
