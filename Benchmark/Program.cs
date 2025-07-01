@@ -19,6 +19,10 @@ class Program
         arrowProperties.PreBuffer = false;
         using var readerProperties = ReaderProperties.GetDefaultReaderProperties();
         readerProperties.EnableBufferedStream();
+        
+        var footerKey = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+        using var fileDecryptionProperties = new FileDecryptionPropertiesBuilder().FooterKey(footerKey).Build();
+        readerProperties.FileDecryptionProperties = fileDecryptionProperties;
 
         var reader = new DatasetReader(
             datasetPath, readerProperties: readerProperties, arrowReaderProperties: arrowProperties);

@@ -17,9 +17,13 @@ public class Program
             columns.Add(new Column<float>($"x{i}"));
         }
 
+        var footerKey = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+        using var fileEncryptionProperties = new FileEncryptionPropertiesBuilder(footerKey).Build();
+
         using var writerProperties = new WriterPropertiesBuilder()
             .Compression(Compression.Snappy)
             .DisableDictionary()
+            .Encryption(fileEncryptionProperties)
             .Build();
 
         using var writer = new ParquetFileWriter(args[0], columns.ToArray(), writerProperties);
