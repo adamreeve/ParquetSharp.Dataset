@@ -8,9 +8,16 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        await ReadDataset(args[0], dateFilter: true, idFilter: true);
-        //await ReadWithArrow($"{args[0]}/test_data.parquet");
-        //await ReadWithPqs($"{args[0]}/test_data.parquet");
+        for (var i = 0; i < 3; ++i)
+        {
+            await ReadDataset(args[0], dateFilter: true, idFilter: true);
+            for (var j = 0; j < 3; ++j)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        }
     }
 
     static async Task ReadDataset(string datasetPath, bool dateFilter = false, bool idFilter = false)
